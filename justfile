@@ -1,41 +1,26 @@
-set shell := ["sh", "-c"]
+#set shell := ["sh", "-c"]
 
-# Build everything
-all: compile-lib compile-api compile-cli
+run service args="":
+    just {{service}}-run {{args}}
 
-# Zig Core Lib
-compile-lib:
-    cd lib && zig build -Doptimize=ReleaseSafe
+build service:
+    just {{service}}-build
 
-# .NET API (Native AOT)
-compile-api: compile-lib
-    cd api && dotnet publish -c Release -r linux-x64
+clean service:
+    just {{service}}-clean
 
-# Go CLI
-compile-cli:
-    cd cli && go build -o ../bin/vault-cli main.go
+api-run:
+    cd api && \
+    dotnet run
 
-# Bun / Elysia Proxy
-run-proxy:
-    cd proxy && bun run dev
+cli-run +args:
+    cd cli && \
+    go run main.go {{args}}
 
-# SolidJS Dashboard
-run-dashboard:
-    cd dashboard && bun run dev
+lib-build:
+    cd lib && \
+    zig build
 
-# Docker Ops
-up:
-    docker-compose up --build
-
-# Clean
-clean:
-    rm -rf lib/zig-out lib/zig-cache api/bin api/obj
-
-# Generate code for all languages from shared protos
-generate-proto:
-    # C# Api
-    protoc --csharp_out=api/Generated shared/*.proto
-    # Go Cli
-    protoc --go_out=cli/generated shared/*.proto
-    # Ts Proxy
-    protoc --es_out=proxy/src/generated shared/*.proto
+lib-clean:
+    cd lib && \
+    rm -rf zig-out
