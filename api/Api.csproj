@@ -3,11 +3,27 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+
     <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+  
+    <PublishAot>true</PublishAot>
+  
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <StackTraceSupport>false</StackTraceSupport>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../lib/zig-out/lib/libvault.so">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
