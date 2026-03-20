@@ -1,12 +1,23 @@
 {
   "name": "dashboard",
-  "module": "index.ts",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "dependencies": {
+    "@solidjs/router": "^0.16.1",
+    "@tanstack/solid-query": "^5.91.3",
+    "solid-js": "^1.9.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/bun": "latest",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5",
+    "vite": "^8.0.1",
+    "vite-plugin-solid": "^2.11.11"
   }
 }

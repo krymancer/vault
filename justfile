@@ -24,3 +24,7 @@ lib-build:
 lib-clean:
     cd lib && \
     rm -rf zig-out
+
+dashboard-dev:
+    cd dashboard && \
+    bun run dev
