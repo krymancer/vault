@@ -91,9 +91,27 @@ type AuthResponse struct {
 }
 
 type KvGetResponse struct {
-	Path     string            `json:"path"`
-	Secrets  map[string]string `json:"secrets"`
-	Children []string          `json:"children"`
+	Path    string            `json:"path"`
+	Secrets map[string]string `json:"secrets"`
+}
+
+type KvListItem struct {
+	Name        string `json:"name"`
+	FullPath    string `json:"fullPath"`
+	Type        string `json:"type"`
+	SecretCount int    `json:"secretCount"`
+	ChildCount  int    `json:"childCount"`
+}
+
+type KvListResponse struct {
+	Path  string       `json:"path"`
+	Items []KvListItem `json:"items"`
+}
+
+type KvBrowseResponse struct {
+	Path    string            `json:"path"`
+	Secrets map[string]string `json:"secrets"`
+	Items   []KvListItem      `json:"items"`
 }
 
 type KvPutResponse struct {
@@ -291,6 +309,19 @@ func main() {
 		Short: "manage KV secrets (requires VAULT_TOKEN)",
 	}
 
+	var kvListCmd = &cobra.Command{
+		Use:   "list [path]",
+		Short: "list paths and secrets (root if no path given)",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			path := ""
+			if len(args) > 0 {
+				path = args[0]
+			}
+			kvList(path)
+		},
+	}
+
 	var kvGetCmd = &cobra.Command{
 		Use:   "get <path>",
 		Short: "read secrets at a path",
@@ -322,7 +353,7 @@ func main() {
 		},
 	}
 
-	kvCmd.AddCommand(kvGetCmd, kvPutCmd, kvDeleteCmd)
+	kvCmd.AddCommand(kvListCmd, kvGetCmd, kvPutCmd, kvDeleteCmd)
 
 	var searchCmd = &cobra.Command{
 		Use:   "search <query>",
@@ -731,6 +762,58 @@ func listTokens() {
 	}
 }
 
+func kvList(path string) {
+	url := "/kv"
+	if path != "" {
+		url = "/kv/" + path
+	}
+	resp, err := authedRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (check VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 404 {
+		fmt.Println("error: path not found")
+		return
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+
+	// Response could be a directory listing or a leaf with secrets
+	var result KvBrowseResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Path: %s\n", result.Path)
+	if len(result.Items) > 0 {
+		for _, item := range result.Items {
+			if item.Type == "directory" {
+				fmt.Printf("  %s/  (%d paths)\n", item.Name, item.ChildCount)
+			} else {
+				fmt.Printf("  %s   (%d secrets)\n", item.Name, item.SecretCount)
+			}
+		}
+	} else if len(result.Secrets) > 0 {
+		fmt.Println("Secrets:")
+		for k, v := range result.Secrets {
+			fmt.Printf("  %s = %s\n", k, v)
+		}
+	} else {
+		fmt.Println("  (empty)")
+	}
+}
+
 func kvGet(path string) {
 	resp, err := authedRequest("GET", "/kv/"+path, nil)
 	if err != nil {
@@ -753,23 +836,26 @@ func kvGet(path string) {
 		return
 	}
 
-	var result KvGetResponse
+	// Response could be directory or leaf — handle both
+	var result KvBrowseResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		fmt.Printf("error reading response: %v\n", err)
 		return
 	}
 
 	fmt.Printf("Path: %s\n", result.Path)
-	if len(result.Secrets) > 0 {
-		fmt.Println("Secrets:")
-		for k, v := range result.Secrets {
-			fmt.Printf("  %s = %s\n", k, v)
+	if len(result.Items) > 0 {
+		for _, item := range result.Items {
+			if item.Type == "directory" {
+				fmt.Printf("  %s/  (%d paths)\n", item.Name, item.ChildCount)
+			} else {
+				fmt.Printf("  %s   (%d secrets)\n", item.Name, item.SecretCount)
+			}
 		}
 	}
-	if len(result.Children) > 0 {
-		fmt.Println("Children:")
-		for _, c := range result.Children {
-			fmt.Printf("  %s/\n", c)
+	if len(result.Secrets) > 0 {
+		for k, v := range result.Secrets {
+			fmt.Printf("  %s = %s\n", k, v)
 		}
 	}
 }
