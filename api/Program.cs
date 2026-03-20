@@ -98,13 +98,12 @@ app.MapPost("/init", async (InitRequest request, VaultDbContext db) =>
 
     var hash = Convert.ToHexString(hashBuffer);
 
-    // Persist vault state
-    var existing = await db.VaultState.FindAsync(1);
-    if (existing is not null) db.VaultState.Remove(existing);
-
-    // Clear all data on re-init
-    await db.Database.ExecuteSqlRawAsync(
-        "TRUNCATE tokens, credentials, secrets, paths, vault_state CASCADE");
+    // Clear all data on re-init (order matters for FK constraints)
+    await db.Tokens.ExecuteDeleteAsync();
+    await db.Credentials.ExecuteDeleteAsync();
+    await db.Secrets.ExecuteDeleteAsync();
+    await db.Paths.ExecuteDeleteAsync();
+    await db.VaultState.ExecuteDeleteAsync();
 
     db.VaultState.Add(new VaultState
     {

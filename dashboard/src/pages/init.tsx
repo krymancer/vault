@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from "solid-js";
+import { createSignal, Show, For, Index } from "solid-js";
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate } from "@solidjs/router";
 import { api, type InitResponse } from "../api";
@@ -47,7 +47,11 @@ export default function Init() {
   const [shards, setShards] = createSignal<string[]>(["", "", ""]);
 
   const updateShard = (index: number, value: string) => {
-    setShards((prev) => prev.map((s, i) => (i === index ? value : s)));
+    setShards((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
   };
 
   const addShard = () => setShards((prev) => [...prev, ""]);
@@ -174,7 +178,7 @@ export default function Init() {
                 </div>
 
                 <button
-                  onClick={() => { fillFromInit(); }}
+                  onClick={fillFromInit}
                   class="w-full bg-vault-surface border border-vault-border hover:bg-vault-surface-hover rounded px-4 py-2 text-sm transition-colors"
                 >
                   Quick unseal with these keys →
@@ -189,7 +193,7 @@ export default function Init() {
           <div class="flex items-center justify-between mb-4">
             <p class="text-xs uppercase tracking-wider text-vault-text-muted">Unseal</p>
             <Show when={isOpen()}>
-              <span class="text-xs text-vault-success">Already unsealed</span>
+              <span class="text-xs text-vault-success">Unsealed</span>
             </Show>
           </div>
 
@@ -224,19 +228,19 @@ export default function Init() {
                 </button>
               </div>
               <div class="space-y-2">
-                <For each={shards()}>
+                <Index each={shards()}>
                   {(shard, i) => (
                     <div class="flex gap-2">
                       <input
                         type="text"
-                        value={shard}
-                        onInput={(e) => updateShard(i(), e.currentTarget.value)}
-                        placeholder={`Key ${i() + 1}...`}
+                        value={shard()}
+                        onInput={(e) => updateShard(i, e.currentTarget.value)}
+                        placeholder={`Key ${i + 1}...`}
                         class="flex-1 bg-vault-bg border border-vault-border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-vault-accent"
                       />
                       <Show when={shards().length > 1}>
                         <button
-                          onClick={() => removeShard(i())}
+                          onClick={() => removeShard(i)}
                           class="text-vault-text-muted hover:text-vault-danger text-sm px-2"
                         >
                           x
@@ -244,13 +248,13 @@ export default function Init() {
                       </Show>
                     </div>
                   )}
-                </For>
+                </Index>
               </div>
             </div>
 
             <button
               onClick={() => unsealMutation.mutate()}
-              disabled={unsealMutation.isPending || isOpen()}
+              disabled={unsealMutation.isPending}
               class="w-full bg-vault-accent hover:bg-vault-accent-hover text-white rounded px-4 py-2 text-sm transition-colors disabled:opacity-50"
             >
               {unsealMutation.isPending ? "Unsealing..." : "Unseal"}
