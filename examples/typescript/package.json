@@ -1,0 +1,13 @@
+{
+  "name": "vault-example-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "bun run seed.ts",
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@vault/sdk": "file:../../integrations/typescript"
+  }
+}
