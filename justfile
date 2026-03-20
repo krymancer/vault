@@ -1,13 +1,13 @@
 #set shell := ["sh", "-c"]
 
-run service args="":
-    just {{service}}-run {{args}}
+run service +args:
+    just {{ service }}-run {{ args }}
 
 build service:
-    just {{service}}-build
+    just {{ service }}-build
 
 clean service:
-    just {{service}}-clean
+    just {{ service }}-clean
 
 api-run:
     cd api && \
@@ -15,7 +15,7 @@ api-run:
 
 cli-run +args:
     cd cli && \
-    go run main.go {{args}}
+    go run main.go {{ args }}
 
 lib-build:
     cd lib && \
