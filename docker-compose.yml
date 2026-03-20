@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "5045:5045"
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  cli:
+    build:
+      context: .
+      dockerfile: cli/Dockerfile
+    environment:
+      - VAULT_ADDR=http://api:5045
+    profiles:
+      - tools

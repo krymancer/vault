@@ -1,0 +1,9 @@
+**/node_modules
+**/zig-out
+**/zig-cache
+**/.zig-cache
+**/bin
+**/obj
+**/dist
+cli/cli
+.git

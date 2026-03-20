@@ -13,7 +13,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var baseURL = "http://localhost:5045"
+var baseURL = getEnv("VAULT_ADDR", "http://localhost:5045")
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 var client = &http.Client{Timeout: 5 * time.Second}
 
