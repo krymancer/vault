@@ -30,4 +30,12 @@ internal static partial class VaultLibrary
   [LibraryImport("libvault.so", EntryPoint = "decrypt")]
   [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
   public static unsafe partial int Decrypt(byte* input, nuint inputLen, byte* output);
+
+  [LibraryImport("libvault.so", EntryPoint = "hmac")]
+  [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+  public static unsafe partial int Hmac(byte* input, nuint inputLen, byte* output);
+
+  [LibraryImport("libvault.so", EntryPoint = "hmac_verify")]
+  [UnmanagedCallConv(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+  public static unsafe partial int HmacVerify(byte* input, nuint inputLen, byte* expected);
 }

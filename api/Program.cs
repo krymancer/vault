@@ -9,13 +9,15 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddOpenApi();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
@@ -28,11 +30,17 @@ static string? GetBearerToken(HttpContext ctx)
     return null;
 }
 
+var tokenTtl = TimeSpan.FromHours(1);
+
+// --- Status ---
+
 app.MapGet("/version", static () =>
 {
     var v = VaultLibrary.IsOpen() ? VaultStatus.Operational : VaultStatus.Closed;
     return Results.Ok(new VersionResponse(v));
 });
+
+// --- Init / Unseal ---
 
 app.MapPost("/init", (InitRequest request) =>
 {
@@ -66,6 +74,7 @@ app.MapPost("/init", (InitRequest request) =>
     }
 
     TokenStore.Clear();
+    CredentialStore.Clear();
     var rootToken = TokenStore.CreateToken("root", "admin");
 
     return Results.Ok(new InitResponse(shards, Convert.ToHexString(hashBuffer), rootToken));
@@ -112,6 +121,30 @@ app.MapPost("/unseal", (UnsealRequest request) =>
 
     return Results.Ok(new UnsealResponse(true));
 });
+
+// --- Auth ---
+
+app.MapPost("/auth", (AuthRequest request) =>
+{
+    if (!VaultLibrary.IsOpen())
+    {
+        return Results.StatusCode(403);
+    }
+
+    if (!CredentialStore.Verify(request.Id, request.Secret))
+    {
+        return Results.Unauthorized();
+    }
+
+    var entry = CredentialStore.Get(request.Id)!;
+    var role = entry.Kind == "user" ? "user" : "app";
+    var token = TokenStore.CreateToken(entry.Name, role, tokenTtl);
+    var expiresAt = DateTime.UtcNow + tokenTtl;
+
+    return Results.Ok(new AuthResponse(token, expiresAt));
+});
+
+// --- Encrypt / Decrypt ---
 
 app.MapPost("/encrypt", (EncryptRequest request, HttpContext ctx) =>
 {
@@ -193,6 +226,58 @@ app.MapPost("/decrypt", (DecryptRequest request, HttpContext ctx) =>
     return Results.Ok(new DecryptResponse(Encoding.UTF8.GetString(output)));
 });
 
+// --- Credential management (admin only) ---
+
+app.MapPost("/credential", (CreateCredentialRequest request, HttpContext ctx) =>
+{
+    if (!VaultLibrary.IsOpen())
+    {
+        return Results.StatusCode(403);
+    }
+
+    var token = GetBearerToken(ctx);
+    if (token is null || !TokenStore.IsAdmin(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    if (request.Kind is not ("app" or "user"))
+    {
+        return Results.BadRequest("Kind must be 'app' or 'user'");
+    }
+
+    var (id, secret) = CredentialStore.Create(request.Name, request.Kind);
+    return Results.Ok(new CreateCredentialResponse(id, secret, request.Name, request.Kind));
+});
+
+app.MapGet("/credential", (HttpContext ctx) =>
+{
+    var token = GetBearerToken(ctx);
+    if (token is null || !TokenStore.IsAdmin(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    var creds = CredentialStore.All()
+        .Select(c => new CredentialInfo(c.Id, c.Entry.Name, c.Entry.Kind, c.Entry.CreatedAt))
+        .ToArray();
+
+    return Results.Ok(new CredentialListResponse(creds));
+});
+
+app.MapDelete("/credential/{id}", (string id, HttpContext ctx) =>
+{
+    var token = GetBearerToken(ctx);
+    if (token is null || !TokenStore.IsAdmin(token))
+    {
+        return Results.Unauthorized();
+    }
+
+    return CredentialStore.Delete(id) ? Results.Ok() : Results.NotFound();
+});
+
+// --- Token management (admin only) ---
+
 app.MapPost("/token", (CreateTokenRequest request, HttpContext ctx) =>
 {
     var token = GetBearerToken(ctx);
@@ -230,7 +315,7 @@ app.MapGet("/token", (HttpContext ctx) =>
     }
 
     var tokens = TokenStore.All()
-        .Select(t => new TokenInfo(t.Token, t.Entry.Name, t.Entry.Role, t.Entry.CreatedAt))
+        .Select(t => new TokenInfo(t.Token, t.Entry.Name, t.Entry.Role, t.Entry.CreatedAt, t.Entry.ExpiresAt))
         .ToArray();
 
     return Results.Ok(new TokenListResponse(tokens));

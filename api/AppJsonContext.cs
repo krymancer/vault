@@ -18,6 +18,12 @@ namespace Api;
 [JsonSerializable(typeof(AdminTokenResponse))]
 [JsonSerializable(typeof(TokenInfo))]
 [JsonSerializable(typeof(TokenListResponse))]
+[JsonSerializable(typeof(CreateCredentialRequest))]
+[JsonSerializable(typeof(CreateCredentialResponse))]
+[JsonSerializable(typeof(CredentialInfo))]
+[JsonSerializable(typeof(CredentialListResponse))]
+[JsonSerializable(typeof(AuthRequest))]
+[JsonSerializable(typeof(AuthResponse))]
 internal partial class AppJsonContext : JsonSerializerContext
 {
 }

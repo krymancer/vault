@@ -111,6 +111,27 @@ export fn init(
     return 0;
 }
 
+const HmacSha256 = crypto.auth.hmac.sha2.HmacSha256;
+
+export fn hmac(input_ptr: [*]const u8, input_len: usize, out_ptr: [*]u8) i32 {
+    if (!is_unsealed) return -1;
+
+    HmacSha256.create(out_ptr[0..32], input_ptr[0..input_len], &master_key);
+    return 0;
+}
+
+export fn hmac_verify(input_ptr: [*]const u8, input_len: usize, expected_ptr: [*]const u8) i32 {
+    if (!is_unsealed) return -1;
+
+    var computed: [32]u8 = undefined;
+    HmacSha256.create(&computed, input_ptr[0..input_len], &master_key);
+
+    if (!std.mem.eql(u8, &computed, expected_ptr[0..32])) {
+        return -2;
+    }
+    return 0;
+}
+
 export fn encrypt(plaintext: [*]const u8, plaintext_len: usize, out_ptr: [*]u8) i32 {
     if (!is_unsealed) return -1;
 
@@ -179,6 +200,29 @@ test "Vault Roundtrip: Init -> Unseal" {
     const unseal_res_3 = unseal(&shards, t - 1, &hash);
     try std.testing.expectEqual(@as(i32, -1), unseal_res_3);
     try std.testing.expect(!vault_is_open());
+}
+
+test "HMAC Roundtrip" {
+    const n: u8 = 5;
+    const t: u8 = 3;
+    var shards = [_]u8{0} ** (5 * 33);
+    var hash_buf = [_]u8{0} ** 32;
+
+    _ = init(n, t, &shards, &hash_buf);
+    _ = unseal(&shards, t, &hash_buf);
+
+    const secret = "my-app-secret";
+    var mac: [32]u8 = undefined;
+    const hmac_res = hmac(secret.ptr, secret.len, &mac);
+    try std.testing.expectEqual(@as(i32, 0), hmac_res);
+
+    const verify_res = hmac_verify(secret.ptr, secret.len, &mac);
+    try std.testing.expectEqual(@as(i32, 0), verify_res);
+
+    const wrong_res = hmac_verify("wrong-secret", 12, &mac);
+    try std.testing.expectEqual(@as(i32, -2), wrong_res);
+
+    is_unsealed = false;
 }
 
 test "Encryption Roundtrip" {

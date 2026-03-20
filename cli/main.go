@@ -49,14 +49,38 @@ type AdminTokenResponse struct {
 }
 
 type TokenInfo struct {
-	Token     string `json:"token"`
-	Name      string `json:"name"`
-	Role      string `json:"role"`
-	CreatedAt string `json:"createdAt"`
+	Token     string  `json:"token"`
+	Name      string  `json:"name"`
+	Role      string  `json:"role"`
+	CreatedAt string  `json:"createdAt"`
+	ExpiresAt *string `json:"expiresAt"`
 }
 
 type TokenListResponse struct {
 	Tokens []TokenInfo `json:"tokens"`
+}
+
+type CreateCredentialResponse struct {
+	Id     string `json:"id"`
+	Secret string `json:"secret"`
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+}
+
+type CredentialInfo struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type CredentialListResponse struct {
+	Credentials []CredentialInfo `json:"credentials"`
+}
+
+type AuthResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expiresAt"`
 }
 
 func getToken() string {
@@ -113,7 +137,7 @@ func main() {
 
 	var encryptCmd = &cobra.Command{
 		Use:   "encrypt <plaintext>",
-		Short: "encrypt a string",
+		Short: "encrypt a string (requires VAULT_TOKEN)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			encryptData(args[0])
@@ -122,21 +146,67 @@ func main() {
 
 	var decryptCmd = &cobra.Command{
 		Use:   "decrypt <ciphertext>",
-		Short: "decrypt a hex ciphertext",
+		Short: "decrypt a hex ciphertext (requires VAULT_TOKEN)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			decryptData(args[0])
 		},
 	}
 
+	var authCmd = &cobra.Command{
+		Use:   "auth <id> <secret>",
+		Short: "authenticate with app/user credentials and get a token",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			authenticate(args[0], args[1])
+		},
+	}
+
+	// --- credential subcommands ---
+
+	var credCmd = &cobra.Command{
+		Use:   "credential",
+		Short: "manage app/user credentials (requires admin VAULT_TOKEN)",
+	}
+
+	var credCreateCmd = &cobra.Command{
+		Use:   "create <name> <app|user>",
+		Short: "create a new credential",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			createCredential(args[0], args[1])
+		},
+	}
+
+	var credListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "list all credentials",
+		Run: func(cmd *cobra.Command, args []string) {
+			listCredentials()
+		},
+	}
+
+	var credDeleteCmd = &cobra.Command{
+		Use:   "delete <id>",
+		Short: "delete a credential",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			deleteCredential(args[0])
+		},
+	}
+
+	credCmd.AddCommand(credCreateCmd, credListCmd, credDeleteCmd)
+
+	// --- token subcommands ---
+
 	var tokenCmd = &cobra.Command{
 		Use:   "token",
-		Short: "manage tokens",
+		Short: "manage tokens (requires admin VAULT_TOKEN)",
 	}
 
 	var tokenCreateCmd = &cobra.Command{
 		Use:   "create <name>",
-		Short: "create a new app token (requires admin VAULT_TOKEN)",
+		Short: "create a new app token",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			createToken(args[0])
@@ -145,7 +215,7 @@ func main() {
 
 	var tokenRevokeCmd = &cobra.Command{
 		Use:   "revoke <token>",
-		Short: "revoke a token (requires admin VAULT_TOKEN)",
+		Short: "revoke a token",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			revokeToken(args[0])
@@ -154,11 +224,13 @@ func main() {
 
 	var tokenListCmd = &cobra.Command{
 		Use:   "list",
-		Short: "list all tokens (requires admin VAULT_TOKEN)",
+		Short: "list all tokens",
 		Run: func(cmd *cobra.Command, args []string) {
 			listTokens()
 		},
 	}
+
+	tokenCmd.AddCommand(tokenCreateCmd, tokenRevokeCmd, tokenListCmd)
 
 	var adminTokenCmd = &cobra.Command{
 		Use:   "admin-token <threshold> <hash> <shard1> <shard2> ...",
@@ -176,8 +248,7 @@ func main() {
 		},
 	}
 
-	tokenCmd.AddCommand(tokenCreateCmd, tokenRevokeCmd, tokenListCmd)
-	rootCmd.AddCommand(statusCmd, initCmd, unsealCmd, encryptCmd, decryptCmd, tokenCmd, adminTokenCmd)
+	rootCmd.AddCommand(statusCmd, initCmd, unsealCmd, encryptCmd, decryptCmd, authCmd, credCmd, tokenCmd, adminTokenCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -300,6 +371,40 @@ func unsealVault(threshold int, hash string, shards []string) {
 	}
 }
 
+func authenticate(id, secret string) {
+	resp, err := postJSON("/auth", map[string]string{
+		"id":     id,
+		"secret": secret,
+	})
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: invalid credentials")
+		return
+	}
+	if resp.StatusCode == 403 {
+		fmt.Println("error: vault is sealed")
+		return
+	}
+	if resp.StatusCode != 200 {
+		fmt.Printf("error: server returned %d\n", resp.StatusCode)
+		return
+	}
+
+	var result AuthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Token:   %s\n", result.Token)
+	fmt.Printf("Expires: %s\n", result.ExpiresAt)
+}
+
 func encryptData(plaintext string) {
 	resp, err := authedRequest("POST", "/encrypt", map[string]string{
 		"plaintext": plaintext,
@@ -362,6 +467,94 @@ func decryptData(ciphertext string) {
 	}
 
 	fmt.Println(result.Plaintext)
+}
+
+func createCredential(name, kind string) {
+	resp, err := authedRequest("POST", "/credential", map[string]string{
+		"name": name,
+		"kind": kind,
+	})
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (requires admin VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 403 {
+		fmt.Println("error: vault is sealed")
+		return
+	}
+	if resp.StatusCode != 200 {
+		fmt.Printf("error: server returned %d\n", resp.StatusCode)
+		return
+	}
+
+	var result CreateCredentialResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Id:     %s\n", result.Id)
+	fmt.Printf("Secret: %s\n", result.Secret)
+	fmt.Printf("Name:   %s\n", result.Name)
+	fmt.Printf("Kind:   %s\n", result.Kind)
+}
+
+func listCredentials() {
+	resp, err := authedRequest("GET", "/credential", nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (requires admin VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode != 200 {
+		fmt.Printf("error: server returned %d\n", resp.StatusCode)
+		return
+	}
+
+	var result CredentialListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	for _, c := range result.Credentials {
+		fmt.Printf("  %s  %s  [%s]\n", c.Id, c.Name, c.Kind)
+	}
+}
+
+func deleteCredential(id string) {
+	resp, err := authedRequest("DELETE", "/credential/"+id, nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (requires admin VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 404 {
+		fmt.Println("error: credential not found")
+		return
+	}
+	if resp.StatusCode != 200 {
+		fmt.Printf("error: server returned %d\n", resp.StatusCode)
+		return
+	}
+
+	fmt.Println("DELETED")
 }
 
 func createToken(name string) {
@@ -445,7 +638,11 @@ func listTokens() {
 	}
 
 	for _, t := range result.Tokens {
-		fmt.Printf("  %s  %s  [%s]\n", t.Token[:16]+"...", t.Name, t.Role)
+		expires := "never"
+		if t.ExpiresAt != nil {
+			expires = *t.ExpiresAt
+		}
+		fmt.Printf("  %s...  %s  [%s]  expires: %s\n", t.Token[:16], t.Name, t.Role, expires)
 	}
 }
 

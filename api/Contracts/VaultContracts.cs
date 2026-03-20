@@ -18,5 +18,14 @@ public record CreateTokenResponse(string Token, string Name);
 public record AdminTokenRequest(string[] Shards, byte Threshold, string Hash);
 public record AdminTokenResponse(string Token);
 
-public record TokenInfo(string Token, string Name, string Role, DateTime CreatedAt);
+public record TokenInfo(string Token, string Name, string Role, DateTime CreatedAt, DateTime? ExpiresAt);
 public record TokenListResponse(TokenInfo[] Tokens);
+
+public record CreateCredentialRequest(string Name, string Kind);
+public record CreateCredentialResponse(string Id, string Secret, string Name, string Kind);
+
+public record CredentialInfo(string Id, string Name, string Kind, DateTime CreatedAt);
+public record CredentialListResponse(CredentialInfo[] Credentials);
+
+public record AuthRequest(string Id, string Secret);
+public record AuthResponse(string Token, DateTime ExpiresAt);

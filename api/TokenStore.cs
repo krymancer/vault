@@ -7,19 +7,28 @@ internal static class TokenStore
 {
     private static readonly ConcurrentDictionary<string, TokenEntry> _tokens = new();
 
-    public record TokenEntry(string Name, string Role, DateTime CreatedAt);
+    public record TokenEntry(string Name, string Role, DateTime CreatedAt, DateTime? ExpiresAt);
 
-    public static string CreateToken(string name, string role)
+    public static string CreateToken(string name, string role, TimeSpan? ttl = null)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        _tokens[token] = new TokenEntry(name, role, DateTime.UtcNow);
+        var expiresAt = ttl.HasValue ? DateTime.UtcNow + ttl.Value : (DateTime?)null;
+        _tokens[token] = new TokenEntry(name, role, DateTime.UtcNow, expiresAt);
         return token;
     }
 
     public static bool Revoke(string token) => _tokens.TryRemove(token, out _);
 
-    public static TokenEntry? Validate(string token) =>
-        _tokens.TryGetValue(token, out var entry) ? entry : null;
+    public static TokenEntry? Validate(string token)
+    {
+        if (!_tokens.TryGetValue(token, out var entry)) return null;
+        if (entry.ExpiresAt.HasValue && entry.ExpiresAt.Value < DateTime.UtcNow)
+        {
+            _tokens.TryRemove(token, out _);
+            return null;
+        }
+        return entry;
+    }
 
     public static bool IsAdmin(string token) =>
         Validate(token) is { Role: "admin" };
