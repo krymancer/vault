@@ -90,6 +90,35 @@ type AuthResponse struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
+type KvGetResponse struct {
+	Path     string            `json:"path"`
+	Secrets  map[string]string `json:"secrets"`
+	Children []string          `json:"children"`
+}
+
+type KvPutResponse struct {
+	Path  string `json:"path"`
+	Count int    `json:"count"`
+}
+
+type SearchResult struct {
+	Path      string `json:"path"`
+	Key       string `json:"key"`
+	Version   int    `json:"version"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type SearchPathResult struct {
+	Path        string `json:"path"`
+	ChildCount  int    `json:"childCount"`
+	SecretCount int    `json:"secretCount"`
+}
+
+type SearchResponse struct {
+	Secrets []SearchResult     `json:"secrets"`
+	Paths   []SearchPathResult `json:"paths"`
+}
+
 func getToken() string {
 	return os.Getenv("VAULT_TOKEN")
 }
@@ -255,7 +284,56 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(statusCmd, initCmd, unsealCmd, encryptCmd, decryptCmd, authCmd, credCmd, tokenCmd, adminTokenCmd)
+	// --- kv subcommands ---
+
+	var kvCmd = &cobra.Command{
+		Use:   "kv",
+		Short: "manage KV secrets (requires VAULT_TOKEN)",
+	}
+
+	var kvGetCmd = &cobra.Command{
+		Use:   "get <path>",
+		Short: "read secrets at a path",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			kvGet(args[0])
+		},
+	}
+
+	var kvPutCmd = &cobra.Command{
+		Use:   "put <path> <key=value> [key=value ...]",
+		Short: "write secrets to a path",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			kvPut(args[0], args[1:])
+		},
+	}
+
+	var kvDeleteCmd = &cobra.Command{
+		Use:   "delete <path> [key]",
+		Short: "delete a path or a specific key",
+		Args:  cobra.RangeArgs(1, 2),
+		Run: func(cmd *cobra.Command, args []string) {
+			key := ""
+			if len(args) > 1 {
+				key = args[1]
+			}
+			kvDelete(args[0], key)
+		},
+	}
+
+	kvCmd.AddCommand(kvGetCmd, kvPutCmd, kvDeleteCmd)
+
+	var searchCmd = &cobra.Command{
+		Use:   "search <query>",
+		Short: "fuzzy search secrets and paths",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			searchSecrets(args[0])
+		},
+	}
+
+	rootCmd.AddCommand(statusCmd, initCmd, unsealCmd, encryptCmd, decryptCmd, authCmd, credCmd, tokenCmd, adminTokenCmd, kvCmd, searchCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -650,6 +728,164 @@ func listTokens() {
 			expires = *t.ExpiresAt
 		}
 		fmt.Printf("  %s...  %s  [%s]  expires: %s\n", t.Token[:16], t.Name, t.Role, expires)
+	}
+}
+
+func kvGet(path string) {
+	resp, err := authedRequest("GET", "/kv/"+path, nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (check VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 404 {
+		fmt.Println("error: path not found")
+		return
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+
+	var result KvGetResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Path: %s\n", result.Path)
+	if len(result.Secrets) > 0 {
+		fmt.Println("Secrets:")
+		for k, v := range result.Secrets {
+			fmt.Printf("  %s = %s\n", k, v)
+		}
+	}
+	if len(result.Children) > 0 {
+		fmt.Println("Children:")
+		for _, c := range result.Children {
+			fmt.Printf("  %s/\n", c)
+		}
+	}
+}
+
+func kvPut(path string, pairs []string) {
+	secrets := make(map[string]string)
+	for _, pair := range pairs {
+		parts := bytes.SplitN([]byte(pair), []byte("="), 2)
+		if len(parts) != 2 {
+			fmt.Printf("error: invalid key=value pair: %s\n", pair)
+			return
+		}
+		secrets[string(parts[0])] = string(parts[1])
+	}
+
+	resp, err := authedRequest("PUT", "/kv/"+path, map[string]any{
+		"secrets": secrets,
+	})
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (check VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 400 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+
+	var result KvPutResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Wrote %d secret(s) to %s\n", result.Count, result.Path)
+}
+
+func kvDelete(path, key string) {
+	url := "/kv/" + path
+	if key != "" {
+		url += "?key=" + key
+	}
+
+	resp, err := authedRequest("DELETE", url, nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (requires admin VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode == 404 {
+		fmt.Println("error: not found")
+		return
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+
+	fmt.Println("DELETED")
+}
+
+func searchSecrets(query string) {
+	resp, err := authedRequest("GET", "/search?q="+query, nil)
+	if err != nil {
+		fmt.Printf("error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		fmt.Println("error: unauthorized (check VAULT_TOKEN)")
+		return
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("error: %s\n", string(body))
+		return
+	}
+
+	var result SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		fmt.Printf("error reading response: %v\n", err)
+		return
+	}
+
+	if len(result.Paths) > 0 {
+		fmt.Println("Paths:")
+		for _, p := range result.Paths {
+			fmt.Printf("  %s  (%d children, %d secrets)\n", p.Path, p.ChildCount, p.SecretCount)
+		}
+	}
+	if len(result.Secrets) > 0 {
+		fmt.Println("Secrets:")
+		for _, s := range result.Secrets {
+			fmt.Printf("  %s/%s  (v%d)\n", s.Path, s.Key, s.Version)
+		}
+	}
+	if len(result.Paths) == 0 && len(result.Secrets) == 0 {
+		fmt.Println("No results")
 	}
 }
 

@@ -69,6 +69,51 @@ export interface TokenInfo {
   expiresAt: string | null;
 }
 
+export interface KvGetResponse {
+  path: string;
+  secrets: Record<string, string>;
+}
+
+export interface KvListItem {
+  name: string;
+  fullPath: string;
+  type: "directory" | "secret";
+  secretCount: number;
+  childCount: number;
+}
+
+export interface KvListResponse {
+  path: string;
+  items: KvListItem[];
+}
+
+export type KvBrowseResult =
+  | { kind: "directory"; data: KvListResponse }
+  | { kind: "leaf"; data: KvGetResponse };
+
+export interface KvPutResponse {
+  path: string;
+  count: number;
+}
+
+export interface SearchResult {
+  path: string;
+  key: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface SearchPathResult {
+  path: string;
+  childCount: number;
+  secretCount: number;
+}
+
+export interface SearchResponse {
+  secrets: SearchResult[];
+  paths: SearchPathResult[];
+}
+
 export const api = {
   version: () => request<VersionResponse>("/version"),
 
@@ -130,4 +175,29 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ shards, threshold, hash }),
     }),
+
+  kvList: (path?: string) =>
+    request<KvListResponse>(path ? `/kv/${path}` : "/kv"),
+
+  kvGet: (path: string) => request<KvGetResponse>(`/kv/${path}`),
+
+  kvBrowse: async (path?: string): Promise<KvBrowseResult> => {
+    const url = path ? `/kv/${path}` : "/kv";
+    const data = await request<any>(url);
+    if ("items" in data) return { kind: "directory", data: data as KvListResponse };
+    return { kind: "leaf", data: data as KvGetResponse };
+  },
+
+  kvPut: (path: string, secrets: Record<string, string>) =>
+    request<KvPutResponse>(`/kv/${path}`, {
+      method: "PUT",
+      body: JSON.stringify({ secrets }),
+    }),
+
+  kvDelete: (path: string, key?: string) =>
+    request<void>(`/kv/${path}${key ? `?key=${key}` : ""}`, {
+      method: "DELETE",
+    }),
+
+  search: (q: string) => request<SearchResponse>(`/search?q=${encodeURIComponent(q)}`),
 };

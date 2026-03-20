@@ -3,6 +3,7 @@ import { useNavigate } from "@solidjs/router";
 import { createQuery } from "@tanstack/solid-query";
 import { api } from "./api";
 import Layout from "./components/layout";
+import SearchModal from "./components/search-modal";
 
 export default function App(props: ParentProps) {
   const navigate = useNavigate();
@@ -12,7 +13,7 @@ export default function App(props: ParentProps) {
     refetchInterval: 5000,
   }));
 
-  // Global keyboard shortcuts
+  // Global keyboard shortcuts (g+key)
   createEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -25,7 +26,7 @@ export default function App(props: ParentProps) {
             case "c": navigate("/credentials"); break;
             case "t": navigate("/tokens"); break;
             case "i": navigate("/init"); break;
-            case "u": navigate("/unseal"); break;
+            case "u": navigate("/init"); break;
             case "a": navigate("/auth"); break;
           }
         };
@@ -40,8 +41,11 @@ export default function App(props: ParentProps) {
   const isOpen = () => status.data?.status === 1;
 
   return (
-    <Layout isOpen={isOpen()}>
-      {props.children}
-    </Layout>
+    <>
+      <SearchModal />
+      <Layout isOpen={isOpen()}>
+        {props.children}
+      </Layout>
+    </>
   );
 }

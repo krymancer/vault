@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import App from "./app";
 import Overview from "./pages/overview";
 import Init from "./pages/init";
-import Unseal from "./pages/unseal";
 import Secrets from "./pages/secrets";
 import Auth from "./pages/auth";
 import Credentials from "./pages/credentials";
@@ -22,8 +21,9 @@ render(
       <Router root={App}>
         <Route path="/" component={Overview} />
         <Route path="/init" component={Init} />
-        <Route path="/unseal" component={Unseal} />
+        <Route path="/unseal" component={Init} />
         <Route path="/secrets" component={Secrets} />
+        <Route path="/secrets/*rest" component={Secrets} />
         <Route path="/auth" component={Auth} />
         <Route path="/credentials" component={Credentials} />
         <Route path="/tokens" component={Tokens} />

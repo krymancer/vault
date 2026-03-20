@@ -6,6 +6,7 @@ export default function Auth() {
   const queryClient = useQueryClient();
   const [id, setId] = createSignal("");
   const [secret, setSecret] = createSignal("");
+  const [manualToken, setManualToken] = createSignal("");
 
   const mutation = createMutation(() => ({
     mutationFn: () => api.auth(id(), secret()),
@@ -39,9 +40,36 @@ export default function Auth() {
         </div>
       </Show>
 
+      {/* Manual token paste */}
+      <div class="bg-vault-surface border border-vault-border rounded-lg p-5 max-w-md mb-4">
+        <p class="text-xs uppercase tracking-wider text-vault-text-muted mb-2">Set Token Directly</p>
+        <div class="flex gap-2">
+          <input
+            type="text"
+            value={manualToken()}
+            onInput={(e) => setManualToken(e.currentTarget.value)}
+            placeholder="Paste a token..."
+            class="flex-1 bg-vault-bg border border-vault-border rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-vault-accent"
+          />
+          <button
+            onClick={() => {
+              if (manualToken().trim()) {
+                localStorage.setItem("vault_token", manualToken().trim());
+                setManualToken("");
+                queryClient.invalidateQueries({ queryKey: ["version"] });
+              }
+            }}
+            disabled={!manualToken().trim()}
+            class="bg-vault-accent hover:bg-vault-accent-hover text-white rounded px-3 py-2 text-sm transition-colors disabled:opacity-50"
+          >
+            Set
+          </button>
+        </div>
+      </div>
+
       <div class="bg-vault-surface border border-vault-border rounded-lg p-6 max-w-md">
         <p class="text-sm text-vault-text-muted mb-4">
-          Authenticate with credential ID and secret to get a token.
+          Or authenticate with credential ID and secret.
         </p>
 
         <div class="space-y-4">

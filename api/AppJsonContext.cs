@@ -24,6 +24,14 @@ namespace Api;
 [JsonSerializable(typeof(CredentialListResponse))]
 [JsonSerializable(typeof(AuthRequest))]
 [JsonSerializable(typeof(AuthResponse))]
+[JsonSerializable(typeof(KvPutRequest))]
+[JsonSerializable(typeof(KvPutResponse))]
+[JsonSerializable(typeof(KvGetResponse))]
+[JsonSerializable(typeof(KvListItem))]
+[JsonSerializable(typeof(KvListResponse))]
+[JsonSerializable(typeof(SearchResult))]
+[JsonSerializable(typeof(SearchPathResult))]
+[JsonSerializable(typeof(SearchResponse))]
 internal partial class AppJsonContext : JsonSerializerContext
 {
 }

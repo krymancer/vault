@@ -51,8 +51,7 @@ export default function Layout(props: ParentProps<{ isOpen: boolean }>) {
           <div class="pt-3 pb-1 px-3 text-[10px] uppercase tracking-wider text-vault-text-muted">
             Operations
           </div>
-          <NavLink href="/init" icon=">" label="Init" />
-          <NavLink href="/unseal" icon="#" label="Unseal" />
+          <NavLink href="/init" icon=">" label="Init & Unseal" />
           <NavLink href="/secrets" icon="*" label="Secrets" />
 
           <div class="pt-3 pb-1 px-3 text-[10px] uppercase tracking-wider text-vault-text-muted">
@@ -75,7 +74,7 @@ export default function Layout(props: ParentProps<{ isOpen: boolean }>) {
             </span>
           </Show>
           <div class="mt-1 text-[10px] text-vault-text-muted">
-            g+o overview | g+s secrets | g+c creds
+            Ctrl+P search | g+o overview | g+s secrets
           </div>
         </div>
       </aside>

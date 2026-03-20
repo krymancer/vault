@@ -1,9 +1,11 @@
 import { createSignal, Show, For } from "solid-js";
 import { createMutation, useQueryClient } from "@tanstack/solid-query";
+import { useNavigate } from "@solidjs/router";
 import { api } from "../api";
 
 export default function Unseal() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [threshold, setThreshold] = createSignal(3);
   const [hash, setHash] = createSignal("");
   const [shards, setShards] = createSignal<string[]>(["", "", ""]);
@@ -25,6 +27,20 @@ export default function Unseal() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["version"] });
+    },
+  }));
+
+  const adminTokenMutation = createMutation(() => ({
+    mutationFn: () =>
+      api.adminToken(
+        shards().filter((s) => s.trim()),
+        threshold(),
+        hash()
+      ),
+    onSuccess: (data) => {
+      localStorage.setItem("vault_token", data.token);
+      queryClient.invalidateQueries({ queryKey: ["version"] });
+      navigate("/secrets");
     },
   }));
 
@@ -106,6 +122,15 @@ export default function Unseal() {
               {mutation.data?.success ? "Vault unsealed successfully" : "Unseal failed - check keys"}
             </p>
           </div>
+          <Show when={mutation.data?.success && !localStorage.getItem("vault_token")}>
+            <button
+              onClick={() => adminTokenMutation.mutate()}
+              disabled={adminTokenMutation.isPending}
+              class="mt-3 w-full bg-vault-surface border border-vault-border hover:bg-vault-surface-hover text-sm rounded px-4 py-2 transition-colors"
+            >
+              {adminTokenMutation.isPending ? "Generating..." : "Generate admin token & continue"}
+            </button>
+          </Show>
         </Show>
 
         <Show when={mutation.isError}>

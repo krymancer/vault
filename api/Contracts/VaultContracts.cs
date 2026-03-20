@@ -29,3 +29,15 @@ public record CredentialListResponse(CredentialInfo[] Credentials);
 
 public record AuthRequest(string Id, string Secret);
 public record AuthResponse(string Token, DateTime ExpiresAt);
+
+// KV
+public record KvPutRequest(Dictionary<string, string> Secrets);
+public record KvPutResponse(string Path, int Count);
+public record KvGetResponse(string Path, Dictionary<string, string> Secrets);
+public record KvListItem(string Name, string FullPath, string Type, int SecretCount, int ChildCount);
+public record KvListResponse(string Path, KvListItem[] Items);
+
+// Search
+public record SearchResult(string Path, string Key, int Version, DateTime UpdatedAt);
+public record SearchPathResult(string Path, int ChildCount, int SecretCount);
+public record SearchResponse(List<SearchResult> Secrets, List<SearchPathResult> Paths);
