@@ -8,6 +8,8 @@
     "start": "bun run index.ts"
   },
   "dependencies": {
-    "@vault/sdk": "file:../../integrations/typescript"
+    "@types/node": "^25.5.0",
+    "@vault/sdk": "file:../../integrations/typescript",
+    "postgres": "^3.4.8"
   }
 }
